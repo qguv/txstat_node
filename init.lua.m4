@@ -56,11 +56,6 @@ function mcp9808.read(reg, bytes)
     return c
 end
 
--- check that the sensor is connected
-function mcp9808.connected()
-    return string.byte(mcp9808.read(MCP9808_REG_ID, 1)) == 0
-end
-
 -- get the ambient temperature in Celsius
 function mcp9808.temp()
     local raw = mcp9808.read(MCP9808_REG_AMBIENT_TEMP, 2)
@@ -85,11 +80,6 @@ function mcp9808.temp()
     end
 
     return temp
-end
-
-function no_mcp9808()
-    gpio.write(LED_IDLE, gpio.HIGH)
-    panic("no connection to mcp9808")
 end
 
 function get_temp(cb)
@@ -133,7 +123,8 @@ function main(netinfo)
 
         -- temperature sensor disconnected
         if (temp == nil) then
-            no_mcp9808()
+            gpio.write(LED_IDLE, gpio.HIGH)
+            panic("no connection to mcp9808")
             return
         end
 
@@ -182,8 +173,4 @@ awaiting_ip = flash(LED_IDLE, FLASH_SLOW_MS)
 
 -- prepare temperature sensor
 i2c.setup(MCP9808_HOST_ADDR, I2C_SDA, I2C_SCL, i2c.SLOW)
-if (not mcp9808.connected()) then
-    no_mcp9808()
-    return
-end
 mcp9808.write(MCP9808_REG_CONFIG, MCP9808_CONFIG_CLEAR)
