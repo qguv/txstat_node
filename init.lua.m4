@@ -8,6 +8,9 @@ local mqtt = require("mqtt")
 local tmr = require("tmr")
 local wifi = require("wifi")
 
+-- no matter what happens, restart the system in IDLE_SEC seconds
+tmr.softwd(IDLE_SEC)
+
 function flash(pin, delay_ms)
     local t = tmr.create()
     t:alarm(delay_ms, tmr.ALARM_AUTO, function (_)
@@ -19,15 +22,15 @@ end
 function idle()
     wifi.eventmon.unregister(wifi.eventmon.STA_DISCONNECTED)
     wifi.eventmon.unregister(wifi.eventmon.STA_DHCP_TIMEOUT)
-    awaiting_ip:unregister()
-    gpio.write(LED_IDLE, gpio.LOW)
+    tmr.create():alarm(5000, tmr.ALARM_SINGLE, function()
+        wifi.setmode(wifi.NULLMODE, false)
+    end)
 end
 
 function panic(msg)
     idle()
     flash(LED_BAD, FLASH_FAST_MS)
     print(msg)
-    --wifi.setmode(wifi.NULLMODE, false)
 end
 
 mcp9808 = {}
@@ -104,7 +107,7 @@ function mqtt_publish(topic, message, cb)
         0,
         function (client)
             client:publish(topic, message, 0, 0)
-            client:close()
+            tmr.create():alarm(1000, tmr.ALARM_SINGLE, function () client:close() end)
             cb()
         end,
         function (_, reason)
@@ -123,7 +126,6 @@ function main(netinfo)
 
         -- temperature sensor disconnected
         if (temp == nil) then
-            gpio.write(LED_IDLE, gpio.HIGH)
             panic("no connection to mcp9808")
             return
         end
@@ -132,7 +134,6 @@ function main(netinfo)
         mqtt_publish(MQTT_TOPIC, temp, function ()
             gpio.write(LED_TX, gpio.LOW)
             idle()
-            tmr.create():alarm(IDLE_MS, tmr.ALARM_SINGLE, node.restart)
 
             -- success
             local good_flash = flash(LED_GOOD, FLASH_FAST_MS)
